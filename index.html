@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Казначейство Либерти - Управление платежами</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Шапка -->
+  <header class="header">
+    <div class="header-content">
+      <h1 class="header-title">💰 Казначейство Либерти</h1>
+      <div class="header-controls">
+        <button class="btn btn-primary" id="addBtn">
+          <span>+</span> Добавить
+        </button>
+        <button class="btn btn-secondary" id="refreshBtn">
+          <span>🔄</span> Обновить
+        </button>
+        <div class="loading-spinner" id="spinner" style="display: none;">
+          <div class="spinner"></div>
+          <span>Загрузка...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Панель фильтров -->
+  <section class="filter-panel">
+    <div class="filters-grid">
+      <div class="filter-item">
+        <label for="filterCounterparty">Контрагент</label>
+        <input type="text" id="filterCounterparty" placeholder="Поиск по контрагенту">
+      </div>
+      <div class="filter-item">
+        <label for="filterPriority">Приоритет</label>
+        <select id="filterPriority" multiple>
+          <option value="high">Высокий</option>
+          <option value="medium">Средний</option>
+          <option value="low">Низкий</option>
+        </select>
+      </div>
+      <div class="filter-item filter-checkbox">
+        <label>
+          <input type="checkbox" id="filterOverdue">
+          Только просроченные
+        </label>
+      </div>
+      <div class="filter-item">
+        <label for="filterDateFrom">Срок от</label>
+        <input type="date" id="filterDateFrom">
+      </div>
+      <div class="filter-item">
+        <label for="filterDateTo">Срок до</label>
+        <input type="date" id="filterDateTo">
+      </div>
+      <div class="filter-item filter-actions">
+        <button class="btn btn-secondary" id="clearFiltersBtn" type="button">Очистить фильтры</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Основной контейнер -->
+  <main class="main-container">
+    <!-- Колонка 1: На оплату (draft) -->
+    <section class="column" data-status="draft">
+      <div class="column-header">
+        <h2 class="column-title">На оплату</h2>
+        <div class="column-header-actions">
+          <button class="column-sort" data-column="draft" title="Сортировать по сроку">⇅</button>
+          <span class="column-count" id="count-draft">0</span>
+          <button class="column-select-all" data-column="draft" title="Выбрать все в колонке">☑️</button>
+        </div>
+      </div>
+      <div class="column-content" id="column-draft">
+        <!-- Карточки платежей будут добавляться сюда -->
+      </div>
+    </section>
+
+    <!-- Колонка 2: Согласовано (approved) -->
+    <section class="column" data-status="approved">
+      <div class="column-header">
+        <h2 class="column-title">Согласовано</h2>
+        <div class="column-header-actions">
+          <button class="column-sort" data-column="approved" title="Сортировать по сроку">⇅</button>
+          <span class="column-count" id="count-approved">0</span>
+          <button class="column-select-all" data-column="approved" title="Выбрать все в колонке">☑️</button>
+        </div>
+      </div>
+      <div class="column-content" id="column-approved">
+        <!-- Карточки платежей будут добавляться сюда -->
+      </div>
+    </section>
+
+    <!-- Колонка 3: Размещено в банке (placed) -->
+    <section class="column" data-status="placed">
+      <div class="column-header">
+        <h2 class="column-title">Размещено в банке</h2>
+        <div class="column-header-actions">
+          <button class="column-sort" data-column="placed" title="Сортировать по сроку">⇅</button>
+          <span class="column-count" id="count-placed">0</span>
+          <button class="column-select-all" data-column="placed" title="Выбрать все в колонке">☑️</button>
+        </div>
+      </div>
+      <div class="column-content" id="column-placed">
+        <!-- Карточки платежей будут добавляться сюда -->
+      </div>
+    </section>
+
+    <!-- Колонка 4: Оплачено (paid) -->
+    <section class="column" data-status="paid">
+      <div class="column-header">
+        <h2 class="column-title">Оплачено</h2>
+        <div class="column-header-actions">
+          <button class="column-sort" data-column="paid" title="Сортировать по сроку">⇅</button>
+          <span class="column-count" id="count-paid">0</span>
+          <button class="column-select-all" data-column="paid" title="Выбрать все в колонке">☑️</button>
+        </div>
+      </div>
+      <div class="column-content" id="column-paid">
+        <!-- Карточки платежей будут добавляться сюда -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Плавающая панель для групповых действий -->
+  <div class="floating-panel" id="floatingPanel" style="display: none;">
+    <div class="floating-panel-content">
+      <div class="floating-panel-info">
+        <span class="selected-count" id="selectedCount">0 выбрано</span>
+        <span class="selected-sum" id="selectedSum">Сумма: 0 ₽</span>
+      </div>
+      <div class="floating-panel-actions">
+        <button class="btn btn-small btn-approve" id="approveSelectedBtn">
+          ✓ Согласовать
+        </button>
+        <button class="btn btn-small btn-status" id="placedSelectedBtn" data-status="placed">
+          📍 В банк
+        </button>
+        <button class="btn btn-small btn-status" id="paidSelectedBtn" data-status="paid">
+          ✅ Оплачено
+        </button>
+        <button class="btn btn-small btn-reject" id="rejectSelectedBtn">
+          ✗ Отклонить
+        </button>
+        <button class="btn btn-small btn-delete" id="deleteSelectedBtn">
+          🗑️ Удалить
+        </button>
+        <button class="btn btn-small btn-cancel" id="cancelSelectedBtn">
+          Отмена
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно для добавления/редактирования платежа -->
+  <div class="modal" id="paymentModal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Добавить новый платёж</h2>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <form class="modal-form" id="paymentForm">
+        <div class="form-group">
+          <label for="amount">Сумма *</label>
+          <input type="number" id="amount" name="amount" required placeholder="0.00">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="counterparty">Контрагент *</label>
+            <input type="text" id="counterparty" name="counterparty" required placeholder="ООО/ИП">
+          </div>
+          <div class="form-group">
+            <label for="priority">Приоритет</label>
+            <select id="priority" name="priority">
+              <option value="low">Низкий</option>
+              <option value="medium" selected>Средний</option>
+              <option value="high">Высокий</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="dueDate">Срок платежа</label>
+            <input type="date" id="dueDate" name="dueDate">
+          </div>
+          <div class="form-group">
+            <label for="budgetArticle">Статья бюджета</label>
+            <input type="text" id="budgetArticle" name="budgetArticle" placeholder="1.2.3">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="purpose">Назначение платежа</label>
+          <textarea id="purpose" name="purpose" rows="3" placeholder="Описание платежа"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="link">Ссылка на счёт</label>
+          <input type="url" id="link" name="link" placeholder="https://...">
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Сохранить</button>
+          <button type="button" class="btn btn-secondary" id="formCancelBtn">Отмена</button>
+          <button type="button" class="btn btn-delete" id="deleteBtn" style="display: none;">🗑️ Удалить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Шаблон для карточки платежа -->
+  <template id="paymentCardTemplate">
+    <div class="payment-card" data-id="">
+      <div class="card-header">
+        <div class="card-amount">
+          <span class="amount-value"></span>
+          <span class="currency">₽</span>
+        </div>
+        <span class="priority-badge"></span>
+      </div>
+      
+      <div class="card-body">
+        <h3 class="card-counterparty"></h3>
+        <p class="card-purpose"></p>
+        <p class="card-budget-article"></p>
+        <a class="card-link" href="#" target="_blank" style="display:none;font-size:12px;color:#2196F3;word-break:break-all;">🔗 Открыть счёт</a>
+      </div>
+
+      <div class="card-footer">
+        <div class="card-dates">
+          <span class="due-date" title="Срок платежа"></span>
+          <span class="created-date" title="Дата создания"></span>
+        </div>
+        <div class="card-actions">
+          <button class="card-action-btn approve-btn" title="Согласовать">✓</button>
+          <button class="card-action-btn reject-btn" title="Отклонить">✗</button>
+          <button class="card-action-btn edit-btn" title="Редактировать">✎</button>
+          <button class="card-action-btn delete-btn" title="Удалить">🗑️</button>
+          <input type="checkbox" class="card-checkbox" title="Выбрать">
+        </div>
+      </div>
+
+      <div class="card-metadata" style="display: none;">
+        <span class="card-id"></span>
+        <span class="card-status"></span>
+        <span class="card-approved"></span>
+        <span class="card-rejection-reason"></span>
+      </div>
+    </div>
+  </template>
+
+  <!-- Поп-ап отклонения платежа -->
+  <div class="modal" id="rejectModal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>Причина отклонения</h2>
+        <button class="modal-close" id="rejectModalCloseBtn">&times;</button>
+      </div>
+      <form class="modal-form" id="rejectForm">
+        <div class="form-group">
+          <label for="rejectionReason">Причина отклонения *</label>
+          <textarea id="rejectionReason" name="rejectionReason" rows="4" placeholder="Укажите причину отклонения платежа" required></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="rejectSubmitBtn">Отклонить</button>
+          <button type="button" class="btn btn-secondary" id="rejectCancelBtn">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast-уведомления -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Скрипт -->
+  <script src="app.js" defer></script>
+</body>
+</html>
