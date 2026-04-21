@@ -7,8 +7,7 @@
 // КОНФИГУРАЦИЯ
 // ============================================================
 
-// Вставьте сюда URL вашего нового Apps Script Web App после деплоя
-const SCRIPT_URL = "REPLACE_WITH_YOUR_APPS_SCRIPT_URL";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzXIgk5NzFVim3VPaQ6bnlul6kH9N-Vd1erB35SQX2M52xhfOVwg6_CrayXkAfadZ3jNA/exec";
 
 // ============================================================
 // ЭЛЕМЕНТЫ DOM
