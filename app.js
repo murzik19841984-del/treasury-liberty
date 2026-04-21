@@ -7,7 +7,8 @@
 // КОНФИГУРАЦИЯ
 // ============================================================
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfOze5IKezrl_hBmWc6nPD3VfVJsyohqTW4bBH4agH7iMMPVyxTl3miAKLQYvzw7cwoA/exec";
+// Вставьте сюда URL вашего нового Apps Script Web App после деплоя
+const SCRIPT_URL = "REPLACE_WITH_YOUR_APPS_SCRIPT_URL";
 
 // ============================================================
 // ЭЛЕМЕНТЫ DOM
@@ -45,6 +46,13 @@ const submitBtn = document.getElementById("submitBtn");
 const deleteBtn = document.getElementById("deleteBtn");
 const paymentTemplate = document.getElementById("paymentCardTemplate");
 
+// DOM элементы для confirm-модала
+const confirmModal = document.getElementById("confirmModal");
+const confirmMessage = document.getElementById("confirmMessage");
+const confirmTitle = document.getElementById("confirmTitle");
+const confirmOkBtn = document.getElementById("confirmOkBtn");
+const confirmCancelBtn = document.getElementById("confirmCancelBtn");
+
 // DOM элементы для поп-апа отклонения
 const rejectModal = document.getElementById("rejectModal");
 const rejectForm = document.getElementById("rejectForm");
@@ -61,6 +69,7 @@ const state = {
   payments: [],
   selectedPayments: new Set(),
   rejectingPaymentId: null, // ID платежа при отклонении
+  activeTab: "draft",       // активная вкладка на мобильном
   filters: {
     query: "",
     priorities: [],
@@ -76,6 +85,9 @@ const state = {
   }
 };
 
+// Резолвер для confirm-модала
+let confirmResolve = null;
+
 // Компатибильность с кодом ниже
 const allPayments = state.payments;
 const selectedPayments = state.selectedPayments;
@@ -86,6 +98,9 @@ const selectedPayments = state.selectedPayments;
 
 document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
+  setupTabBar();
+  setupFilterToggle();
+  setupDragDrop();
   fetchAllPayments();
 });
 
@@ -175,6 +190,13 @@ function setupEventListeners() {
   rejectCancelBtn.addEventListener("click", closeRejectModal);
   rejectForm.addEventListener("submit", handleRejectSubmit);
   rejectionReasonField.addEventListener("input", updateRejectSubmitBtn);
+
+  // Confirm-модал
+  confirmOkBtn.addEventListener("click", () => closeConfirmModal(true));
+  confirmCancelBtn.addEventListener("click", () => closeConfirmModal(false));
+  confirmModal.addEventListener("click", (e) => {
+    if (e.target === confirmModal) closeConfirmModal(false);
+  });
 }
 
 // ============================================================
@@ -255,6 +277,9 @@ function renderBoard() {
     }
 
     countEl.textContent = payments.length;
+
+    const tabCountEl = document.getElementById(`tab-count-${status}`);
+    if (tabCountEl) tabCountEl.textContent = payments.length;
 
     payments.forEach(payment => {
       const cardEl = createPaymentCard(payment);
@@ -364,6 +389,20 @@ function createPaymentCard(payment) {
 
   // Устанавливаем data-id
   card.dataset.id = payment.id;
+
+  // Drag & drop (только на десктопе — touch не триггерит drag-события)
+  if (!("ontouchstart" in window)) {
+    card.draggable = true;
+    card.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", payment.id);
+      e.dataTransfer.effectAllowed = "move";
+      // Задержка нужна, чтобы браузер успел сделать drag-снимок до изменения стиля
+      setTimeout(() => card.classList.add("dragging"), 0);
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+    });
+  }
 
   // Заполняем данные (formatMoney уже включает ₽, скрываем отдельный span)
   clone.querySelector(".amount-value").textContent = formatMoney(payment.amount);
@@ -573,7 +612,9 @@ function updateRejectSubmitBtn() {
  * Обработчик согласования платежа
  */
 async function handleApprove(paymentId) {
-  if (!confirm("Вы уверены, что хотите согласовать этот платёж?")) {
+  if (!await showConfirm("Вы уверены, что хотите согласовать этот платёж?", {
+    okText: "Согласовать", okClass: "btn-approve"
+  })) {
     return;
   }
 
@@ -776,7 +817,9 @@ async function handleDelete() {
   const paymentId = paymentForm.dataset.paymentId;
   if (!paymentId) return;
 
-  if (!confirm("Вы уверены, что хотите удалить этот платёж?")) {
+  if (!await showConfirm("Вы уверены, что хотите удалить этот платёж?", {
+    okText: "Удалить", okClass: "btn-delete"
+  })) {
     return;
   }
 
@@ -938,7 +981,9 @@ async function batchUpdateSelected(status) {
 async function deleteSelected() {
   if (state.selectedPayments.size === 0) return;
   
-  if (!confirm(`Удалить ${state.selectedPayments.size} платежей?`)) {
+  if (!await showConfirm(`Удалить выбранные платежи (${state.selectedPayments.size} шт.)?`, {
+    okText: "Удалить", okClass: "btn-delete"
+  })) {
     return;
   }
 
@@ -1107,13 +1152,161 @@ function getPlural(count, one, two, five) {
 }
 
 // ============================================================
+// DRAG & DROP
+// ============================================================
+
+function setupDragDrop() {
+  if ("ontouchstart" in window) return; // только на десктопе
+
+  document.querySelectorAll(".column-content").forEach(colContent => {
+    colContent.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      colContent.classList.add("drag-over");
+    });
+
+    colContent.addEventListener("dragleave", (e) => {
+      // Игнорируем событие, если курсор перешёл на дочерний элемент
+      if (!colContent.contains(e.relatedTarget)) {
+        colContent.classList.remove("drag-over");
+      }
+    });
+
+    colContent.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      colContent.classList.remove("drag-over");
+
+      const paymentId = e.dataTransfer.getData("text/plain");
+      const newStatus = colContent.closest(".column").dataset.status;
+      if (!paymentId || !newStatus) return;
+
+      const payment = state.payments.find(p => p.id === paymentId);
+      if (!payment || payment.status === newStatus) return;
+
+      await dragMovePayment(payment, newStatus);
+    });
+  });
+}
+
+async function dragMovePayment(payment, newStatus) {
+  const oldStatus = payment.status;
+
+  try {
+    showSpinner(true);
+    const updateData = { status: newStatus };
+    if (newStatus === "approved") updateData.approved = true;
+
+    const result = await updatePayment(payment.id, updateData);
+    if (result.success) {
+      Object.assign(payment, updateData);
+      payment.updated_at = new Date().toISOString();
+
+      await addHistory({
+        payment_id: payment.id,
+        action: "drag_move",
+        old_value: oldStatus,
+        new_value: newStatus,
+        user: "user"
+      });
+
+      renderBoard();
+      showNotification(`Перемещено в «${getStatusLabel(newStatus)}»`, "success");
+    }
+  } catch (error) {
+    console.error("Ошибка при перемещении:", error);
+    showNotification("Ошибка при перемещении платежа", "error");
+  } finally {
+    showSpinner(false);
+  }
+}
+
+function getStatusLabel(status) {
+  const labels = {
+    draft: "На оплату",
+    approved: "Согласовано",
+    placed: "В банке",
+    paid: "Оплачено"
+  };
+  return labels[status] || status;
+}
+
+// ============================================================
+// CONFIRM-МОДАЛ
+// ============================================================
+
+/**
+ * Показывает кастомный confirm-диалог вместо window.confirm().
+ * Возвращает Promise<boolean>.
+ */
+function showConfirm(message, { okText = "Подтвердить", okClass = "btn-primary", title = "Подтверждение" } = {}) {
+  confirmTitle.textContent = title;
+  confirmMessage.textContent = message;
+  confirmOkBtn.textContent = okText;
+  confirmOkBtn.className = `btn ${okClass}`;
+  confirmModal.style.display = "flex";
+  document.body.classList.add("no-scroll");
+  confirmOkBtn.focus();
+
+  return new Promise(resolve => {
+    confirmResolve = resolve;
+  });
+}
+
+function closeConfirmModal(result) {
+  confirmModal.style.display = "none";
+  document.body.classList.remove("no-scroll");
+  if (confirmResolve) {
+    confirmResolve(result);
+    confirmResolve = null;
+  }
+}
+
+// ============================================================
+// МОБИЛЬНАЯ НАВИГАЦИЯ: ВКЛАДКИ
+// ============================================================
+
+function setupTabBar() {
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+  // Инициализируем активную вкладку
+  switchTab(state.activeTab);
+}
+
+function switchTab(tab) {
+  state.activeTab = tab;
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+
+  document.querySelectorAll(".column").forEach(col => {
+    col.classList.toggle("tab-active", col.dataset.status === tab);
+  });
+}
+
+// ============================================================
+// МОБИЛЬНАЯ НАВИГАЦИЯ: ФИЛЬТРЫ
+// ============================================================
+
+function setupFilterToggle() {
+  const btn = document.getElementById("filterToggleBtn");
+  const panel = document.getElementById("filterPanel");
+  if (!btn || !panel) return;
+
+  btn.addEventListener("click", () => {
+    panel.classList.toggle("filters-open");
+  });
+}
+
+// ============================================================
 // ЗАКРЫТИЕ МОДАЛЬНОГО ОКНА ПО ESCAPE
 // ============================================================
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && paymentModal.style.display === "flex") {
-    closeModal();
-  }
+  if (e.key !== "Escape") return;
+  if (confirmModal.style.display === "flex") closeConfirmModal(false);
+  else if (paymentModal.style.display === "flex") closeModal();
 });
 
 // ============================================================

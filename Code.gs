@@ -1,17 +1,70 @@
 /**
  * Google Apps Script Web App для управления платежами
  * Листы: "Payments" и "History"
- * 
+ *
  * Колонки Payments (A-M):
- * A: id, B: amount, C: counterparty, D: due_date, E: purpose, 
- * F: link, G: priority, H: budget_article, I: status, 
+ * A: id, B: amount, C: counterparty, D: due_date, E: purpose,
+ * F: link, G: priority, H: budget_article, I: status,
  * J: approved, K: rejection_reason, L: created_at, M: updated_at
+ *
+ * Колонки History (A-G):
+ * A: id, B: payment_id, C: action, D: old_value, E: new_value, F: user, G: timestamp
  */
 
-const SCRIPT_LOCK_TIMEOUT = 30000; // 30 секунд
+const SCRIPT_LOCK_TIMEOUT = 30000;
 const PAYMENTS_SHEET = "Payments";
 const HISTORY_SHEET = "History";
-const HEADERS = ["id", "amount", "counterparty", "due_date", "purpose", "link", "priority", "budget_article", "status", "approved", "rejection_reason", "created_at", "updated_at"];
+const PAYMENT_HEADERS = ["id", "amount", "counterparty", "due_date", "purpose", "link", "priority", "budget_article", "status", "approved", "rejection_reason", "created_at", "updated_at"];
+const HISTORY_HEADERS  = ["id", "payment_id", "action", "old_value", "new_value", "user", "timestamp"];
+
+/**
+ * Первичная настройка таблицы.
+ * Запустить один раз из редактора Apps Script после создания нового файла.
+ */
+function setupSpreadsheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // --- Лист Payments ---
+  let paymentsSheet = ss.getSheetByName(PAYMENTS_SHEET);
+  if (!paymentsSheet) {
+    paymentsSheet = ss.insertSheet(PAYMENTS_SHEET);
+  }
+  _initSheet(paymentsSheet, PAYMENT_HEADERS, "#1565C0");
+
+  // --- Лист History ---
+  let historySheet = ss.getSheetByName(HISTORY_SHEET);
+  if (!historySheet) {
+    historySheet = ss.insertSheet(HISTORY_SHEET);
+  }
+  _initSheet(historySheet, HISTORY_HEADERS, "#2E7D32");
+
+  // Удаляем дефолтный лист «Лист1» / «Sheet1» если он пустой
+  ["Лист1", "Sheet1"].forEach(name => {
+    const s = ss.getSheetByName(name);
+    if (s && s.getLastRow() === 0) ss.deleteSheet(s);
+  });
+
+  SpreadsheetApp.getUi().alert("✅ Таблица настроена!\n\nЛисты Payments и History созданы. Теперь задеплойте Web App и скопируйте URL в app.js.");
+}
+
+function _initSheet(sheet, headers, headerColor) {
+  // Заголовки только если лист пустой
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+  }
+
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setFontWeight("bold")
+             .setFontColor("#ffffff")
+             .setBackground(headerColor)
+             .setHorizontalAlignment("center");
+
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidth(1, 220); // id — широкий
+  for (let i = 2; i <= headers.length; i++) {
+    sheet.setColumnWidth(i, 150);
+  }
+}
 
 /**
  * GET запрос: возвращает все данные из листа Payments
@@ -228,7 +281,7 @@ function handleAddHistory(payload) {
     const historyRow = [
       payload.id || Utilities.getUuid(),
       payload.payment_id || "",
-      payload.action_type || "",
+      payload.action || "",
       payload.old_value || "",
       payload.new_value || "",
       payload.user || "",

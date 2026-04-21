@@ -26,8 +26,32 @@
     </div>
   </header>
 
+  <!-- Вкладки (мобильная навигация) -->
+  <nav class="tab-bar" id="tabBar" role="tablist">
+    <button class="tab-btn active" data-tab="draft" role="tab">
+      На оплату
+      <span class="tab-count" id="tab-count-draft">0</span>
+    </button>
+    <button class="tab-btn" data-tab="approved" role="tab">
+      Согласовано
+      <span class="tab-count" id="tab-count-approved">0</span>
+    </button>
+    <button class="tab-btn" data-tab="placed" role="tab">
+      В банке
+      <span class="tab-count" id="tab-count-placed">0</span>
+    </button>
+    <button class="tab-btn" data-tab="paid" role="tab">
+      Оплачено
+      <span class="tab-count" id="tab-count-paid">0</span>
+    </button>
+  </nav>
+
   <!-- Панель фильтров -->
-  <section class="filter-panel">
+  <section class="filter-panel" id="filterPanel">
+    <button class="filter-toggle-btn" id="filterToggleBtn" type="button">
+      <span>⚙ Фильтры</span>
+      <span class="filter-toggle-icon">▾</span>
+    </button>
     <div class="filters-grid">
       <div class="filter-item">
         <label for="filterCounterparty">Контрагент</label>
@@ -270,6 +294,22 @@
           <button type="button" class="btn btn-secondary" id="rejectCancelBtn">Отмена</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно подтверждения -->
+  <div class="modal" id="confirmModal" style="display: none;">
+    <div class="modal-content modal-content--confirm">
+      <div class="modal-header">
+        <h2 id="confirmTitle">Подтверждение</h2>
+      </div>
+      <div class="confirm-body">
+        <p id="confirmMessage"></p>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn btn-primary" id="confirmOkBtn">Подтвердить</button>
+        <button class="btn btn-secondary" id="confirmCancelBtn">Отмена</button>
+      </div>
     </div>
   </div>
 
