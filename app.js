@@ -215,19 +215,27 @@ async function fetchAllPayments() {
   showSpinner(true);
 
   try {
-    const response = await fetch(`${SCRIPT_URL}?action=getAll`);
-    
+    const response = await fetch(`${SCRIPT_URL}?action=getAll`, { redirect: "follow" });
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const data = await response.json();
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : [];
+
+    if (!Array.isArray(data)) {
+      throw new Error("Неожиданный формат ответа: " + text.slice(0, 100));
+    }
+
     state.payments = data;
     renderBoard();
-    showNotification(`Загружено ${data.length} платежей`, "success");
+    if (data.length > 0) {
+      showNotification(`Загружено ${data.length} платежей`, "success");
+    }
   } catch (error) {
     console.error("Ошибка при загрузке платежей:", error);
-    showNotification("Ошибка при загрузке данных", "error");
+    showNotification("Ошибка загрузки: " + error.message, "error");
   } finally {
     showSpinner(false);
   }
